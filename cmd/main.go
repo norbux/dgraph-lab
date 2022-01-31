@@ -14,7 +14,7 @@ import (
 )
 
 type Account struct {
-	//Uid       string     `json:"uid,omitempty`
+	Uid       string    `json:"uid,omitempty"`
 	FirstName string    `json:"firstName,omitempty"`
 	LastName  string    `json:"lastName,omitempty"`
 	EmailList []Email   `json:"emailList,omitempty"`
@@ -63,6 +63,7 @@ func main() {
 	birthdate := time.Date(1980, 01, 01, 22, 0, 0, 0, time.UTC)
 	email := "jperez@example.com"
 
+	// Insert 2 nodes and edge at once
 	account := &Account{
 		FirstName: name,
 		LastName:  lastName,
@@ -88,5 +89,54 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("The response: %+v", response.Uids)
+	log.Printf("Response Uids: %+v", response.Uids)
+
+	// Query a node and add an edge to a new node on it
+	query := `{
+		user(func: eq(firstName, "Juan")) {
+			uid
+		}
+	}`
+
+	queryResp, err := dgraphClient.NewTxn().Query(ctx, query)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	type uid map[string]string
+	type qResp struct {
+		User []uid `json:"user"`
+	}
+	var u qResp
+	err = json.Unmarshal(queryResp.Json, &u)
+	if err != nil {
+		log.Fatal()
+	}
+
+	id := u.User[0]["uid"]
+	log.Printf("Uid: %v", id)
+
+	updateAccount := &Account{
+		Uid:   id,
+		DType: []string{"Account"},
+		EmailList: []Email{
+			{Address: "newemail@gmail.com", IsDefault: false, DType: []string{"Email"}},
+		},
+	}
+
+	update := &api.Mutation{
+		CommitNow: true,
+	}
+
+	accountBytes, err = json.Marshal(updateAccount)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	update.SetJson = accountBytes
+	updateResponse, err := dgraphClient.NewTxn().Mutate(ctx, update)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Response Uids: %+v", updateResponse.Uids)
 }
